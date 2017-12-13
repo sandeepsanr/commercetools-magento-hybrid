@@ -1,0 +1,138 @@
+<?php
+/**
+ * Copyright © Magento, Inc. All rights reserved.
+ * See COPYING.txt for license details.
+ */
+
+// @codingStandardsIgnoreFile
+$ini_array = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . "/magento/vendor/magento/module-checkout/properties.ini");
+$projectKey = $ini_array['projectKey'];
+$token = $ini_array['token'];
+$baseURL = $ini_array['baseURL'];
+
+// Get Email of Current Customer Logged in
+$objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+$customerSession = $objectManager->create('Magento\Customer\Model\Session');
+$customerEmail = $customerSession->getCustomer()->getEmail();
+
+
+
+if($customerEmail === NULL){
+   /* $anonymousID=$_COOKIE["anonymousID"];
+    $commercetools_cart_id=$_COOKIE[$anonymousID];
+    setcookie($anonymousID, "", time() - (86400 * 2), "/"); // 86400 = 1 day // deleting cookies by setting expiration date to one hour ago
+    setcookie("anonymousID", "", time() - (86400 * 2), "/"); // 86400 = 1 day
+*/
+   //$commercetools_cart_id=$_COOKIE["thisCart"];
+
+	$commercetools_cart_id=$_COOKIE["anonymousID"];
+
+  //  setcookie("thisCart", "", time() - (86400 * 2), "/"); // 86400 = 1 day // deleting cookies by setting expiration date to one hour ago
+   // setcookie("anonymousID", "", time() - (86400 * 2), "/"); // 86400 = 1 day
+} 
+else{
+    // Fetch Commercetools CartId of of the corresponding email
+    $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+    $connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+    $commercetools_cart_id_result = $connection->fetchAll("SELECT commercetools_cart_id FROM `integrate_commercetools` WHERE cust_email='" . $customerEmail . "'");
+    $commercetools_cart_id = $commercetools_cart_id_result[0]['commercetools_cart_id'];
+}
+?>
+<?php /** @var $block \Magento\Checkout\Block\Onepage\Success */ ?>
+
+<?php
+$curl = curl_init();
+curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt_array($curl, array(
+    // CURLOPT_URL => "https://api.sphere.io/openkart-1/carts/".$commercetools_cart_id."",
+    CURLOPT_URL => $baseURL . $projectKey . "/carts/" . $commercetools_cart_id . "",
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_ENCODING => "",
+    CURLOPT_MAXREDIRS => 10,
+    CURLOPT_TIMEOUT => 30,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+    CURLOPT_CUSTOMREQUEST => "GET",
+    CURLOPT_HTTPHEADER => array(
+        // "authorization: Bearer zhztQJDmwBD_bBSMUpgFwsKeMe0ckDh2",
+        "authorization: Bearer " . $token,
+        "cache-control: no-cache",
+        "postman-token: 3be8eb42-8726-a3f0-1c2d-f860c143b50d"
+    )
+));
+$cartResponse = curl_exec($curl);
+// echo "$cartResponse";
+$cartResponse = json_decode($cartResponse);
+$cartVersion = $cartResponse->version;
+$cartErr = curl_error($curl);
+// echo "$cartErr";
+
+foreach ($cartResponse->customLineItems as $value) {
+    curl_setopt_array($curl, array(
+        // CURLOPT_URL => "https://api.sphere.io/openkart-1/carts/".$commercetools_cart_id."",
+        CURLOPT_URL => $baseURL . $projectKey . "/carts/" . $commercetools_cart_id . "",
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => "",
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => "POST",
+        CURLOPT_POSTFIELDS => '{
+  "version": ' . $cartVersion . ',
+  "actions": [{
+    "action": "removeCustomLineItem",
+    "customLineItemId": "' . $value->id . '"
+  }]
+}',
+        CURLOPT_HTTPHEADER => array(
+            // "authorization: Bearer zhztQJDmwBD_bBSMUpgFwsKeMe0ckDh2",
+            "authorization: Bearer " . $token,
+            "cache-control: no-cache",
+            "postman-token: 5825f449-0ef2-42a6-4df3-cfc481be7aa3",
+            'Content-Type: application/json'
+        )
+    ));
+    $removeResponse = curl_exec($curl);
+    $removeResponse = json_decode($removeResponse);
+    $cartVersion = $removeResponse->version;
+    $cartErr = curl_error($curl);
+    echo "$cartErr";
+}
+
+curl_close($curl);
+/*
+ *
+ *
+ * $response = curl_exec($curl);
+ * $err = curl_error($curl);
+ *
+ *
+ *
+ * if ($err) {
+ * echo "cURL Error #:" . $err;
+ * } else {
+ * echo $response;
+ * }
+ */
+?>
+
+
+<div class="checkout-success">
+    <?php if ($block->getOrderId()):?>
+        <?php if ($block->getCanViewOrder()) :?>
+            <p><?= __('Your order number is: %1.', sprintf('<a href="%s" class="order-number"><strong>%s</strong></a>', $block->escapeHtml($block->getViewOrderUrl()), $block->escapeHtml($block->getOrderId()))) ?></p>
+        <?php  else :?>
+            <p><?= __('Your order # is: <span>%1</span>.', $block->escapeHtml($block->getOrderId())) ?></p>
+        <?php endif;?>
+            <p><?= /* @escapeNotVerified */ __('We\'ll email you an order confirmation with details and tracking info.') ?></p>
+    <?php endif;?>
+
+    <?= $block->getAdditionalInfoHtml() ?>
+
+    <div class="actions-toolbar">
+		<div class="primary">
+			<a class="action primary continue"
+				href="<?= /* @escapeNotVerified */ $block->getContinueUrl() ?>"><span><?= /* @escapeNotVerified */ __('Continue Shopping') ?></span></a>
+		</div>
+	</div>
+</div>

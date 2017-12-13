@@ -1,0 +1,341 @@
+<?php
+
+$ini_array = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . "/magento/vendor/magento/module-checkout/properties.ini");
+$projectKey = $ini_array['projectKey'];
+$token = $ini_array['token'];
+$baseURL = $ini_array['baseURL'];
+
+
+
+
+$customerEmail = $block->getCustomer()->getEmail();
+$customerFirstName=$block->getCustomer()->getFirstname();
+$curr = "USD";
+/* $token="LfrlvDA4vRoqLlPby5SxVrVAFs22oP1f";
+$baseURL="https://api.sphere.io/";
+$projectKey="openkart-1"; */
+
+
+
+//Fetch Commercetools CartId of of the corresponding email
+$objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+$connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+$cust_email = $connection->fetchAll("SELECT cust_email FROM `integrate_commercetools` WHERE cust_email='".$customerEmail."'");
+if(!empty($cust_email)){
+    $cust_email=$cust_email[0]['cust_email'];
+}
+
+
+
+
+if($cust_email!=$customerEmail){
+    
+    
+    //Sign Up
+    
+    
+    // creating customer in commercetools
+    $curl = curl_init();
+    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    
+    $desc='{
+                  "email": "'.$customerEmail.'",
+                  "password": "'.$customerEmail.'",
+                  "firstName": "'.$customerFirstName.'"
+                }';
+    curl_setopt_array($curl, array(
+      //  CURLOPT_URL => "https://api.sphere.io/openkart-1/customers",
+        CURLOPT_URL => $baseURL.$projectKey."/customers",
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_ENCODING => "",
+        CURLOPT_MAXREDIRS => 10,
+        CURLOPT_TIMEOUT => 30,
+        CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+        CURLOPT_CUSTOMREQUEST => "POST",
+        CURLOPT_POSTFIELDS => $desc,
+        CURLOPT_HTTPHEADER => array(
+            "authorization: Bearer ".$token,
+            "cache-control: no-cache",
+            "postman-token: 38e182ac-4fff-d92e-923b-56f89bd7640c"
+        ),
+    ));
+    
+    $response = curl_exec($curl);
+    $err = curl_error($curl);
+    
+    curl_close($curl);
+    
+    if ($err) {
+        echo "cURL Error #:" . $err;
+    } else {
+        // echo $response;
+	$response = json_decode($response);
+  $commercetools_customer_id=$response->customer->id;
+    }
+    
+    
+    
+    
+    
+    
+    //merge anonymous cart
+    if(isset($_COOKIE["anonymousID"])){
+        
+        
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+        
+        $anonymousID=$_COOKIE["anonymousID"];
+        // $commercetools_cart_id=$_COOKIE[$anonymousID];
+        
+        
+        $desc='  {
+              "email": "'.$customerEmail.'",
+              "password": "'.$customerEmail.'",
+              "anonymousId": "'.$anonymousID.'"
+            }';
+        
+        curl_setopt_array($curl, array(
+         //   CURLOPT_URL => "https://api.sphere.io/openkart-1/login",
+            CURLOPT_URL => $baseURL.$projectKey."/login",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_POSTFIELDS => $desc,
+            CURLOPT_HTTPHEADER => array(
+                "authorization: Bearer ".$token,
+                "cache-control: no-cache",
+                "postman-token: 84b54a06-1948-ee4c-1777-15fa56079da2"
+            ),
+        ));
+        
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        
+        
+        if ($err) {
+            echo "cURL Error #:" . $err;
+        } else {
+            /*  // echo $response;
+             $response= json_decode($response);
+             $response=$response->cart;
+             $cartID=$response->id;
+             //   $cartID="5ef0b5b0-f96e-4684-a7e6-b39a3a75d56f";
+             $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+             $connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+             // $sql = "UPDATE 'integrate_commercetools` SET `commercetools_cart_id`='".$cartID."' WHERE `cust_email`='".$customerEmail."'";
+             
+             $sql = "UPDATE integrate_commercetools SET commercetools_cart_id='".$cartID."' WHERE cust_email='".$customerEmail."'";
+             $connection->query($sql); */
+            
+            $response = json_decode($response);
+            $response=$response->cart;
+            $commercetools_cart_id = $response->id;
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+            $sql = "INSERT INTO `integrate_commercetools`(`cust_email`, `commercetools_cart_id`, `curr`) VALUES ('" . $customerEmail . "','" . $commercetools_cart_id . "','" . $curr . "')";
+            $connection->query($sql);
+            
+            
+            
+        }
+        curl_close($curl);
+        
+        
+        
+    }
+    
+    else{
+        //in case no anonymous Id is found in cookies( direct sign up)
+        
+        
+        $curl = curl_init();
+        curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+        curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+ $desc='{
+          "currency": "USD",
+           "customerEmail":"'.$customerEmail.'",
+	"customerId":"'.$commercetools_customer_id.'"
+        }';
+        
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => $baseURL.$projectKey."/carts/",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_POSTFIELDS => $desc,
+            CURLOPT_HTTPHEADER => array(
+                "authorization: Bearer ".$token,
+                "cache-control: no-cache",
+                "postman-token: 90344df5-7d5d-7f9e-7f43-3b756782fd94",
+                'Content-Type: application/json'
+            )
+        ));
+        
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        
+        if ($err) {
+            echo "cURL Error #:" . $err;
+        } else {
+            $response = json_decode($response);
+            $commercetools_cart_id = $response->id;
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+            $sql = "INSERT INTO `integrate_commercetools`(`cust_email`, `commercetools_cart_id`, `curr`) VALUES ('" . $customerEmail . "','" . $commercetools_cart_id . "','" . $curr . "')";
+            $connection->query($sql);
+            
+            
+        }
+        
+        curl_close($curl);
+        
+        
+        
+        
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+}
+else{
+    
+    //Sign In
+    
+    $curl = curl_init();
+    curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+    curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+    
+    //  $anonymousID=$_COOKIE["anonymousID"];
+    // $commercetools_cart_id=$_COOKIE[$anonymousID];
+    
+    if(isset($_COOKIE["anonymousID"])){
+        $anonymousID=$_COOKIE["anonymousID"];
+        $desc='  {
+              "email": "'.$customerEmail.'",
+              "password": "'.$customerEmail.'",
+              "anonymousId": "'.$anonymousID.'"
+            }';
+        
+        curl_setopt_array($curl, array(
+         //   CURLOPT_URL => "https://api.sphere.io/openkart-1/login",
+            CURLOPT_URL => $baseURL.$projectKey."/login",
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => "",
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => "POST",
+            CURLOPT_POSTFIELDS => $desc,
+            CURLOPT_HTTPHEADER => array(
+                "authorization: Bearer ".$token,
+                "cache-control: no-cache",
+                "postman-token: 84b54a06-1948-ee4c-1777-15fa56079da2"
+            ),
+        ));
+        
+        $response = curl_exec($curl);
+        $err = curl_error($curl);
+        
+        
+        if ($err) {
+            echo "cURL Error #:" . $err;
+        } else {
+            // echo $response;
+            $response= json_decode($response);
+            $response=$response->cart;
+            $cartID=$response->id;
+            //   $cartID="5ef0b5b0-f96e-4684-a7e6-b39a3a75d56f";
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+            // $sql = "UPDATE 'integrate_commercetools` SET `commercetools_cart_id`='".$cartID."' WHERE `cust_email`='".$customerEmail."'";
+            
+            $sql = "UPDATE integrate_commercetools SET commercetools_cart_id='".$cartID."' WHERE cust_email='".$customerEmail."'";
+            $connection->query($sql);
+            
+            
+        }
+        curl_close($curl);
+    }
+    
+}
+?>
+
+
+<?php
+/**
+ * Copyright © Magento, Inc. All rights reserved.
+ * See COPYING.txt for license details.
+ */
+
+// @codingStandardsIgnoreFile
+
+/** @var \Magento\Customer\Block\Account\Dashboard\Info $block */
+?>
+<div class="block block-dashboard-info">
+    <div class="block-title"><strong><?= $block->escapeHtml(__('Account Information')) ?></strong></div>
+    <div class="block-content">
+        <div class="box box-information">
+            <strong class="box-title">
+                <span><?= $block->escapeHtml(__('Contact Information')) ?></span>
+            </strong>
+            <div class="box-content">
+                <p>
+                    <?= $block->escapeHtml($block->getName()) ?><br>
+                    <?= $block->escapeHtml($block->getCustomer()->getEmail()) ?><br>
+                </p>
+            </div>
+            <div class="box-actions">
+                <a class="action edit" href="<?= $block->escapeUrl($block->getUrl('customer/account/edit')) ?>">
+                    <span><?= $block->escapeHtml(__('Edit')) ?></span>
+                </a>
+                <a href="<?= $block->escapeUrl($block->getChangePasswordUrl()) ?>" class="action change-password">
+                    <?= $block->escapeHtml(__('Change Password')) ?>
+                </a>
+            </div>
+        </div>
+        <?php if ($block->isNewsletterEnabled()): ?>
+            <div class="box box-newsletter">
+                <strong class="box-title">
+                    <span><?= $block->escapeHtml(__('Newsletters')) ?></span>
+                </strong>
+                <div class="box-content">
+                    <p>
+                        <?php if ($block->getIsSubscribed()): ?>
+                            <?= $block->escapeHtml(__('You are subscribed to "General Subscription".')) ?>
+                        <?php else: ?>
+                            <?= $block->escapeHtml(__('You aren\'t subscribed to our newsletter.')) ?>
+                        <?php endif; ?>
+                    </p>
+                    <?php /* Extensions placeholder */ ?>
+                    <?= $block->getChildHtml('customer.account.dashboard.info.extra') ?>
+                </div>
+                <div class="box-actions">
+                    <a class="action edit" href="<?= $block->escapeUrl($block->getUrl('newsletter/manage')) ?>"><span><?= $block->escapeHtml(__('Edit')) ?></span></a>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>

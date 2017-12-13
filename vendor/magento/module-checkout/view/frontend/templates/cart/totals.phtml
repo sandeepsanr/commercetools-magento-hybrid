@@ -1,0 +1,131 @@
+<?php
+/**
+ * Copyright © 2013-2017 Magento, Inc. All rights reserved.
+ * See COPYING.txt for license details.
+ */
+?>
+<?php
+/**
+* Shopping cart totals template
+* @var $block \Magento\Checkout\Block\Cart\Totals
+*/
+?>
+<div id="cart-totals" class="cart-totals" data-bind="scope:'block-totals'">
+    <!-- ko template: getTemplate() --><!-- /ko -->
+     
+ 
+    <script type="text/x-magento-init">
+            {
+                "#cart-totals": {
+                    "Magento_Ui/js/core/app": <?php /* @escapeNotVerified */ echo $block->getJsLayout();?>
+                }
+            }
+    </script>  
+    
+    
+    <?php
+        $ini_array = parse_ini_file($_SERVER['DOCUMENT_ROOT'] . "/magento/vendor/magento/module-checkout/properties.ini");
+        $projectKey = $ini_array['projectKey'];
+        $token = $ini_array['token'];
+        $baseURL = $ini_array['baseURL'];
+        
+      /*   echo "<br/>";
+        echo "<br/>projectKey = ".$ini_array['projectKey'];
+        echo "<br/>token = ".$ini_array['token'];
+        echo "<br/>baseURL = ".$ini_array['baseURL'];  */
+        
+        
+        // Get Email of Current Customer Logged in
+        $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+        $customerSession = $objectManager->create('Magento\Customer\Model\Session');
+        $customerEmail = $customerSession->getCustomer()->getEmail();
+        
+        
+        
+        if($customerEmail === NULL){
+           // $anonymousID=$_COOKIE["anonymousID"];
+           // $commercetools_cart_id=$_COOKIE["thisCart"];
+	$anonymousID=$_COOKIE["anonymousID"];
+		 $commercetools_cart_id=$_COOKIE[$anonymousID];
+
+
+        }
+        else{
+            
+            // Fetch Commercetools CartId of of the corresponding email
+            $objectManager = \Magento\Framework\App\ObjectManager::getInstance();
+            $connection = $objectManager->get('Magento\Framework\App\ResourceConnection')->getConnection('\Magento\Framework\App\ResourceConnection::DEFAULT_CONNECTION');
+            $commercetools_cart_id_result = $connection->fetchAll("SELECT commercetools_cart_id FROM `integrate_commercetools` WHERE cust_email='" . $customerEmail . "'");
+            $commercetools_cart_id = $commercetools_cart_id_result[0]['commercetools_cart_id'];
+        }
+    ?> 
+ 
+    
+      <?php
+          $curl = curl_init();
+          curl_setopt($curl, CURLOPT_SSL_VERIFYHOST, false);
+          curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+          curl_setopt_array($curl, array(
+            //  CURLOPT_URL => "https://api.sphere.io/openkart-1/carts/c9ba6221-b65d-4e41-ae8a-358af51ef720",
+              CURLOPT_URL => $baseURL.$projectKey."/carts/".$commercetools_cart_id."",
+              CURLOPT_RETURNTRANSFER => true,
+              CURLOPT_ENCODING => "",
+              CURLOPT_MAXREDIRS => 10,
+              CURLOPT_TIMEOUT => 30,
+              CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+              CURLOPT_CUSTOMREQUEST => "GET",
+              CURLOPT_HTTPHEADER => array(
+                //  "authorization: Bearer zhztQJDmwBD_bBSMUpgFwsKeMe0ckDh2",
+                  "authorization: Bearer ".$token,
+                  "cache-control: no-cache",
+                  "postman-token: a56b3df4-f21e-5c23-8dce-a9714046880f"
+              ),
+          ));
+          
+          $response = curl_exec($curl);
+          $err = curl_error($curl);
+          
+          curl_close($curl);
+          
+          if ($err) {
+              echo "cURL Erruor #:" . $err;
+          } else {
+              $response =json_decode($response);
+          }
+          
+        ?>
+
+
+	<div class="table-wrapper">
+		<table class="data table totals">
+			<caption class="table-caption">Total</caption>
+			<tbody>
+				<tr class="totals sub">
+					<th class="mark" scope="row">Subtotal</th>
+					<td class="amount"><span class="price">$<?php echo number_format($response->totalPrice->centAmount,2);?></span>
+					</td>
+				</tr>
+				<tr class="totals shipping excl">
+					<th class="mark" scope="row"><span class="label"
+						data-bind="text: title">Shipping</span> <span class="value"
+						data-bind="text: getShippingMethodTitle()">(Flat Rate - Fixed)</span>
+					</th>
+					<td class="amount"><span class="price"
+						data-bind="text: getValue(), attr: {'data-th': title}"
+						data-th="Shipping">$0.00</span></td>
+				</tr>
+				<tr class="totals-tax">
+					<th class="mark" colspan="1" scope="row">Tax</th>
+					<td class="amount" data-th="Tax"><span class="price">$0.00</span></td>
+				</tr>
+				<tr class="grand totals">
+					<th class="mark" scope="row"><strong>Order Total</strong></th>
+					<td class="amount" data-th="Order Total"><strong><span
+							class="price">$<?php echo  number_format($response->totalPrice->centAmount,2);?></span></strong>
+					</td>
+				</tr>
+
+			</tbody>
+		</table>
+	</div>
+</div>

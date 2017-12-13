@@ -1,0 +1,79 @@
+<?php
+/**
+ * Copyright © 2013-2017 Magento, Inc. All rights reserved.
+ * See COPYING.txt for license details.
+ */
+
+// @codingStandardsIgnoreFile
+
+?>
+<div class="block discount" id="block-discount" data-mage-init='{"collapsible":{"openedState": "active", "saveState": false}}'>
+    <div class="title" data-role="title">
+        <strong id="block-discount-heading" role="heading" aria-level="2"><?php /* @escapeNotVerified */ echo __('Apply Discount Code') ?></strong>
+    </div>
+    <div class="content" data-role="content" aria-labelledby="block-discount-heading">
+        <form id="discount-coupon-form"
+              action="<?php /* @escapeNotVerified */ echo $block->getUrl('checkout/cart/couponPost') ?>"
+              method="post"
+              data-mage-init='{"discountCode":{"couponCodeSelector": "#coupon_code",
+                                               "removeCouponSelector": "#remove-coupon",
+                                               "applyButton": "button.action.apply",
+                                               "cancelButton": "button.action.cancel"}}'>
+            <div class="fieldset coupon<?php strlen($block->getCouponCode()) ? ' applied' : ''?>">
+            
+            <?php //echo "1111".$block->getCouponCode();?>
+            <?php
+
+                $curl = curl_init();
+            
+                  curl_setopt_array($curl, array(
+                CURLOPT_URL => "https://api.sphere.io/e-shop/carts/596a12f7-607f-4c56-ab9b-c7daa2e61641",
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_ENCODING => "",
+                CURLOPT_MAXREDIRS => 10,
+                CURLOPT_TIMEOUT => 30,
+                CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+                CURLOPT_CUSTOMREQUEST => "POST",
+                CURLOPT_POSTFIELDS => "{\r\n  \"version\": 3,\r\n  \"actions\": [{\r\n    \"action\": \"addDiscountCode\",\r\n    \"code\": \"ny\"\r\n  }]\r\n}",
+                CURLOPT_HTTPHEADER => array(
+                    "authorization: Bearer Q8SEPv2F_eYF8zhFh7UyPvgWhTGYcTn_",
+                    "cache-control: no-cache",
+                    "postman-token: dba25e60-cdbc-ec8e-6248-a8322b196bd8"
+                )
+            ));
+            
+            $response = curl_exec($curl);
+            $err = curl_error($curl);
+            
+            curl_close($curl);
+            
+            if ($err) {
+            //    echo "cURL Error #:" . $err;
+            } else {
+               // echo $response;
+            }
+            ?>
+                <input type="hidden" name="remove" id="remove-coupon" value="0" />
+                <div class="field">
+                    <label for="coupon_code" class="label"><span><?php /* @escapeNotVerified */ echo __('Enter discount code') ?></span></label>
+                    <div class="control">
+                        <input type="text" class="input-text" id="coupon_code" name="coupon_code" value="<?php echo $block->escapeHtml($block->getCouponCode()) ?>" placeholder="<?php echo $block->escapeHtml(__('Enter discount code'));?>" />
+                    </div>
+                </div>
+                <div class="actions-toolbar">
+                    <?php if (!strlen($block->getCouponCode())): ?>
+                    <div class="primary">
+                        <button class="action apply primary" type="button" value="<?php /* @escapeNotVerified */ echo __('Apply Discount') ?>">
+                            <span><?php /* @escapeNotVerified */ echo __('Apply Discount') ?></span>
+                        </button>
+                    </div>
+                    <?php else: ?>
+                        <div class="primary">
+                            <button  type="button" class="action cancel primary" value="<?php /* @escapeNotVerified */ echo __('Cancel Coupon') ?>"><span><?php /* @escapeNotVerified */ echo __('Cancel Coupon') ?></span></button>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
